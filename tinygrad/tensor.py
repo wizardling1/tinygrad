@@ -2018,7 +2018,6 @@ class Tensor(SimpleMathTrait):
     combined_indices = indices[0].cat(*indices[1:], dim=dim)
     return self.gather(dim, combined_indices), combined_indices
 
-
   def topk2(self, k:Int, axis:Int=None, largest:Bool=True, sorted:Bool=True):
     # ignore axis and largest and sorted for now; return the largest and in descending order
     # assume the values are floating/integral for now.
@@ -2044,7 +2043,6 @@ class Tensor(SimpleMathTrait):
           max = mid 
       else:
           min = mid
-
 
   @staticmethod
   def einsum(formula:str, *operands:Tensor|Sequence[Tensor], acc_dtype:DTypeLike|None=None) -> Tensor:
