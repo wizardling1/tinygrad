@@ -1,0 +1,17 @@
+Traceback (most recent call last):
+  File "/Users/igor/gitclones/tinygrad/tinygrad/test_topk.py", line 12, in <module>
+    filtered = a.gather(0, (b * Tensor.arange(a.shape[0])).where(b, -1)[b])
+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "/Users/igor/gitclones/tinygrad/tinygrad/tensor.py", line 4062, in _wrapper
+    ret = fn(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^
+  File "/Users/igor/gitclones/tinygrad/tinygrad/tensor.py", line 1222, in __getitem__
+    return self._getitem(indices)
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/igor/gitclones/tinygrad/tinygrad/tensor.py", line 4037, in _wrapper
+    if _METADATA.get() is not None: return fn(*args, **kwargs)
+                                           ^^^^^^^^^^^^^^^^^^^
+  File "/Users/igor/gitclones/tinygrad/tinygrad/tensor.py", line 1114, in _getitem
+    if not dtypes.is_int(index.dtype): raise IndexError(f"index dtype {index.dtype} is not supported")
+                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+IndexError: index dtype dtypes.bool is not supported

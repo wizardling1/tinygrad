@@ -2004,6 +2004,48 @@ class Tensor(SimpleMathTrait):
     """
     return self._inverse().argmax(axis=axis, keepdim=keepdim)
 
+  def topk(self, k, dim=-1, largest=True, sorted_=True):
+    # TODO: not ideal impl
+    # TODO: maybe go from value to index instead of index to value.
+    if not sorted_: raise NotImplementedError
+    dim = self._resolve_dim(dim)
+    x, indices = self, []
+    select_fxn, mask_value = (Tensor.argmax, dtypes.min(self.dtype)) if largest else (Tensor.argmin, dtypes.max(self.dtype))
+    for _ in range(k):
+      idx = select_fxn(x, dim, keepdim=True)
+      indices.append(idx)
+      x = x.scatter(dim, idx, mask_value)
+    combined_indices = indices[0].cat(*indices[1:], dim=dim)
+    return self.gather(dim, combined_indices), combined_indices
+
+
+  def topk2(self, k:Int, axis:Int=None, largest:Bool=True, sorted:Bool=True):
+    # ignore axis and largest and sorted for now; return the largest and in descending order
+    # assume the values are floating/integral for now.
+
+    min = self.min()
+    max = self.max()
+    temp = self
+
+    while True:
+      mid = (max + min) / 2
+      cmp = temp > mid
+      s = cmp.sum().numpy()
+      print(s)
+      if (s == k):
+          indicies = Tensor.arange(0,self.shape[0]) * cmp
+          indicies = Tensor.arange(self.shape[0]) * indicies.where(cmp,-1)
+          out = []
+          for i in indicies.numpy():
+              if (i >= 0):
+                  out.append(i)
+          return out
+      elif (s < k):
+          max = mid 
+      else:
+          min = mid
+
+
   @staticmethod
   def einsum(formula:str, *operands:Tensor|Sequence[Tensor], acc_dtype:DTypeLike|None=None) -> Tensor:
     """
