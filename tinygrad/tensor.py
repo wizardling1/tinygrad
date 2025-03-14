@@ -2143,7 +2143,7 @@ class Tensor(SimpleMathTrait):
     if not ceil_mode: return pool(self, reg_pads).mean(axis)
     return pool(self, ceil_pads).sum(axis) / pool(self.pad(reg_pads).ones_like(), tuple(cp-rp for cp,rp in zip(ceil_pads, reg_pads))).sum(axis)
 
-  def max_pool2d(self, kernel_size:tuple[int, ...]=(2,2), stride=None, dilation=1, padding:int|tuple[int, ...]=0,
+  def max_pool2d(self, kernel_size:int|tuple[int, ...]=(2,2), stride=None, dilation=1, padding:int|tuple[int, ...]=0,
                  ceil_mode=False):
     """
     Applies max pooling over a tensor.
