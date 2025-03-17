@@ -2057,24 +2057,72 @@ class Tensor(SimpleMathTrait):
     assert len(k_) == len(s_) == len(d_), f"stride/dilation mismatch kernel:{k_} stride:{s_} dilation:{d_}"
     noop, i_ = [None] * (self.ndim-len(k_)), self.shape[-len(k_):]
     assert all(resolve(d*(k-1)+1 <= i) for k,d,i in zip(k_,d_,i_)), "kernel size cannot be greater than actual input size"
+
+
     o_ = [ceildiv(i-d*(k-1), s) for i,d,k,s in zip(i_,d_,k_,s_)]
-    if any(resolve(k > s) for k,s in zip(k_,s_)) or any(d != 1 for d in d_):
-      # input size scaling factor to make sure shrink for stride is possible
-      f_ = [1 + int(resolve(o*s > (i - d*(k-1)))) for o,s,i,d,k in zip(o_,s_,i_,d_,k_)]
-      # # repeats such that we don't need padding
-      x = self.repeat([1]*len(noop) + [ceildiv(k*(i*f+d),i) for k,i,d,f in zip(k_,i_,d_,f_)])
-      # handle dilation
-      x = x.shrink(tuple(noop + [(0,k*(i*f+d)) for k,i,d,f in zip(k_,i_,d_,f_)])).reshape(noop + flatten((k,(i*f+d)) for k,i,d,f in zip(k_,i_,d_,f_)))
-      # handle stride
-      x = x.shrink(tuple(noop + flatten(((0,k), (0,o*s)) for k,o,s in zip(k_,o_,s_)))).reshape(noop + flatten((k,o,s) for k,o,s in zip(k_,o_,s_)))
-      x = x.shrink(tuple(noop + flatten(((0,k), (0,o), (0,1)) for k,o in zip(k_,o_)))).reshape(noop + flatten((k,o) for k,o in zip(k_,o_)))
-      # permute to move reduce to the end
-      return x.permute(*range(len(noop)), *[len(noop)+i*2+1 for i in range(len(i_))], *[len(noop)+i*2 for i in range(len(i_))])
-    # TODO: once the shapetracker can optimize well, remove this alternative implementation
-    x = self.pad(tuple(noop + [(0, max(0,o*s-i)) for i,o,s in zip(i_,o_,s_)])).shrink(tuple(noop + [(0,o*s) for o,s in zip(o_,s_)]))
-    x = x.reshape(noop + flatten(((o,s) for o,s in zip(o_,s_))))
-    x = x.shrink(tuple(noop + flatten(((0,o), (0,k)) for o,k in zip(o_,k_))))
-    return x.permute(*range(len(noop)), *[len(noop)+i*2 for i in range(len(i_))], *[len(noop)+i*2+1 for i in range(len(i_))])
+
+    #if (len(k_) > 1):
+    if 0:
+        #print("doing something special!")
+        shape=self.shape
+        dims = len(shape)
+        pool_shape = [shape[d] for d in range(dims-2)] + o_ + list(k_)
+
+        '''
+        print("self:"); print(self.numpy())
+        print("i_", i_)
+        print("d_", d_)
+        print("k_", k_)
+        print("s_", s_)
+        print("pool_shape", pool_shape)
+
+        '''
+
+        from itertools import product
+
+        window_samples = Tensor(list(product(*[[k * dilation for k in range(k_i)] for k_i in k_]))) # relative sampling indices within a window
+        #print("window samples: ", window_samples.numpy())
+        k1, k2 = pool_shape[-4], pool_shape[-3] # number of pools in each direction
+        x, y = Tensor.meshgrid(Tensor.arange(k1), Tensor.arange(k2))
+        pool_indices = Tensor.stack(x.flatten(), y.flatten()).transpose() * stride # index of top-left corner of each pool
+        #print("pool indices shape:" , pool_indices.shape)
+        idxs = window_samples.reshape(1,-1,len(k_)) + pool_indices.reshape(-1,1,len(k_)) 
+        #print("idxs shape (unflattened): ", idxs.shape)
+        idxs = (idxs * Tensor([shape[-1],1])).sum(-1) # the idxs for a single 2d matrix with these settings
+        #print("idxs shape (flattened): ", idxs.shape)
+        nelem = prod(shape[-len(k_):])
+        y = prod(shape[:-len(k_)])
+        x = Tensor.arange(y) * nelem
+        x = x.reshape(y,1,1)
+        #print("x: ", x.numpy())
+        idxs = idxs.repeat(prod(shape[:-len(k_)]), 1, 1) + x # replicate to each dimension
+
+        #print("idxs shape (repeated): ", idxs.shape)
+
+        '''
+        idxs = idxs.reshape(pool_shape)
+        my_pools = self.flatten()[idxs]
+        return my_pools
+        '''
+    if 1:
+      #print("some 1-d pool call (?)")
+      if any(resolve(k > s) for k,s in zip(k_,s_)) or any(d != 1 for d in d_):
+        # input size scaling factor to make sure shrink for stride is possible
+        f_ = [1 + int(resolve(o*s > (i - d*(k-1)))) for o,s,i,d,k in zip(o_,s_,i_,d_,k_)]
+        # # repeats such that we don't need padding
+        x = self.repeat([1]*len(noop) + [ceildiv(k*(i*f+d),i) for k,i,d,f in zip(k_,i_,d_,f_)])
+        # handle dilation
+        x = x.shrink(tuple(noop + [(0,k*(i*f+d)) for k,i,d,f in zip(k_,i_,d_,f_)])).reshape(noop + flatten((k,(i*f+d)) for k,i,d,f in zip(k_,i_,d_,f_)))
+        # handle stride
+        x = x.shrink(tuple(noop + flatten(((0,k), (0,o*s)) for k,o,s in zip(k_,o_,s_)))).reshape(noop + flatten((k,o,s) for k,o,s in zip(k_,o_,s_)))
+        x = x.shrink(tuple(noop + flatten(((0,k), (0,o), (0,1)) for k,o in zip(k_,o_)))).reshape(noop + flatten((k,o) for k,o in zip(k_,o_)))
+        # permute to move reduce to the end
+        return x.permute(*range(len(noop)), *[len(noop)+i*2+1 for i in range(len(i_))], *[len(noop)+i*2 for i in range(len(i_))])
+      # TODO: once the shapetracker can optimize well, remove this alternative implementation
+      x = self.pad(tuple(noop + [(0, max(0,o*s-i)) for i,o,s in zip(i_,o_,s_)])).shrink(tuple(noop + [(0,o*s) for o,s in zip(o_,s_)]))
+      x = x.reshape(noop + flatten(((o,s) for o,s in zip(o_,s_))))
+      x = x.shrink(tuple(noop + flatten(((0,o), (0,k)) for o,k in zip(o_,k_))))
+      return x.permute(*range(len(noop)), *[len(noop)+i*2 for i in range(len(i_))], *[len(noop)+i*2+1 for i in range(len(i_))])
 
   def _resolve_pool_pads(self, padding:int|Sequence[int], dims:int) -> Sequence[int]:
     if not isinstance(padding, int) and not (len(padding) == 2*dims or len(padding) == dims):
@@ -2144,7 +2192,7 @@ class Tensor(SimpleMathTrait):
     return pool(self, ceil_pads).sum(axis) / pool(self.pad(reg_pads).ones_like(), tuple(cp-rp for cp,rp in zip(ceil_pads, reg_pads))).sum(axis)
 
   def max_pool2d(self, kernel_size:int|tuple[int, ...]=(2,2), stride=None, dilation=1, padding:int|tuple[int, ...]=0,
-                 ceil_mode=False, return_indices=False):
+                 ceil_mode=False):
     """
     Applies max pooling over a tensor.
 
@@ -2179,37 +2227,7 @@ class Tensor(SimpleMathTrait):
     """
     pads = self._resolve_pool_pads(padding, len(k_ := make_tuple(kernel_size, 2)))
     if ceil_mode: pads = self._apply_ceil_mode(pads, k_, stride if stride is not None else k_, dilation)
-    pools = self.pad(pads, value=dtypes.min(self.dtype))._pool(k_, stride if stride is not None else k_, dilation)
-    maxpools = pools.max(tuple(range(-len(k_), 0)))
-
-    if not return_indices: return maxpools
-
-    from itertools import product
-
-    window_samples = Tensor(list(product(*[[k * dilation for k in range(k_i)] for k_i in k_]))) # relative sampling indices within a window
-    k1, k2 = pools.shape[-4], pools.shape[-3] # number of pools in each direction
-    x, y = Tensor.meshgrid(Tensor.arange(k1), Tensor.arange(k2))
-    pool_indices = Tensor.stack(x.flatten(), y.flatten()).transpose() * stride # index of top-left corner of each pool
-    idxs = window_samples.reshape(1,-1,len(k_)) + pool_indices.reshape(-1,1,len(k_)) 
-    idxs = (idxs * Tensor([self.shape[-1],1])).sum(-1) # the idxs for a single 2d matrix with these settings
-
-    '''
-    nelem = prod(shape[-len(k_):])
-    y = prod(shape[:-len(k_)])
-    x = Tensor.arange(y) * nelem
-    x = x.reshape(y,1,1)
-    '''
-    idxs = idxs.repeat(prod(self.shape[:-len(k_)]), 1, 1) # replicate to each dimension
-    idxs = idxs.reshape(pools.shape)
-
-    # Flatten the window dimensions in both `pools` and `idxs`
-    flat_pools = pools.reshape(*pools.shape[:-len(k_)], prod(k_))
-    flat_idxs  = idxs.reshape(*idxs.shape[:-len(k_)], prod(k_))
-    maxpool_flat_idx = flat_idxs.gather(dim=-1, index=flat_pools.argmax(-1).unsqueeze(-1)).squeeze(-1)
-
-    return maxpools, maxpool_flat_idx
-
-
+    return self.pad(pads, value=dtypes.min(self.dtype))._pool(k_, stride if stride is not None else k_, dilation).max(tuple(range(-len(k_), 0)))
 
   def conv2d(self, weight:Tensor, bias:Tensor|None=None, groups=1, stride=1, dilation=1, padding:int|tuple[int, ...]=0,
              dtype:DTypeLike|None=None) -> Tensor:
