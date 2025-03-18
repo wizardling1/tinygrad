@@ -2206,7 +2206,6 @@ class Tensor(SimpleMathTrait):
         return maxpool, maxpool_idxs - (pads[0] + pads[2] * self.shape[-1]) 
     return maxpool
 
-
   def conv2d(self, weight:Tensor, bias:Tensor|None=None, groups=1, stride=1, dilation=1, padding:int|tuple[int, ...]=0,
              dtype:DTypeLike|None=None) -> Tensor:
     """
